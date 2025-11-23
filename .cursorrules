@@ -1,0 +1,37 @@
+# Cursor AI Rules for Whack 2025 Project
+
+## CRITICAL: Environment Files (.env)
+
+**NEVER overwrite or delete existing .env files or .env.example files.**
+
+### Rules for .env files:
+1. **Always check if .env exists before creating/modifying it**
+2. **Never use `cat > .env` or `write` tool to overwrite .env files**
+3. **If .env exists, only ADD new variables, never replace the entire file**
+4. **Preserve all existing API keys and configuration values**
+5. **Use `.env.example` as a template, but never overwrite actual .env files**
+6. **When adding new environment variables:**
+   - Read the existing .env file first
+   - Only append new variables that don't exist
+   - Use `search_replace` to update specific lines if needed
+   - Or provide instructions for manual editing
+
+### Safe approach for .env modifications:
+```bash
+# ✅ SAFE: Read first, then append only new variables
+# ✅ SAFE: Use search_replace to update specific lines
+# ❌ NEVER: Overwrite entire .env file
+# ❌ NEVER: Delete .env file
+```
+
+### If .env doesn't exist:
+- Create it from .env.example template
+- But preserve any existing .env.example file
+
+## General Development Rules
+
+1. **Always preserve user data and configuration**
+2. **Ask before making destructive changes**
+3. **Backup before major refactoring**
+4. **Test changes incrementally**
+
