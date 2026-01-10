@@ -140,3 +140,12 @@ speechClient.recognize({
 - [申请增加配额](https://console.cloud.google.com/iam-admin/quotas)
 - [计费信息](https://cloud.google.com/speech-to-text/pricing)
 
+
+
+
+
+
+
+
+
+

@@ -9,7 +9,7 @@
 
 import { Audio, InterruptionModeIOS, InterruptionModeAndroid } from 'expo-av';
 import * as Speech from 'expo-speech';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { generateSpeech, TextToSpeechResponse } from './api';
 
 // Audio queue for sequential playback

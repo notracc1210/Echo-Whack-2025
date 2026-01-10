@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal, Alert, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { VoiceButton } from '../VoiceButton';
 import { Page } from '../../App';
@@ -15,62 +15,31 @@ export function HomePage({ onNavigate, onVoiceCommand }: HomePageProps) {
   const insets = useSafeAreaInsets();
   const [isTypingMode, setIsTypingMode] = useState(false);
   const [textInput, setTextInput] = useState('');
-  const [showEmergencyModal, setShowEmergencyModal] = useState(false);
 
   /**
    * Handle 911 Emergency button press
    */
   const handleEmergencyCall = () => {
-    // On mobile, show confirmation modal
-    if (Platform.OS === 'ios' || Platform.OS === 'android') {
-      Alert.alert(
-        'Emergency Call',
-        'Do you want to call 911?',
-        [
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => setShowEmergencyModal(false),
-          },
-          {
-            text: 'Call 911',
-            style: 'destructive',
-            onPress: () => {
-              // Open phone dialer with 911
-              Linking.openURL('tel:911');
-              setShowEmergencyModal(false);
-            },
-          },
-        ],
-        { cancelable: true }
-      );
-    } else {
-      // On web, show modal asking for confirmation
-      setShowEmergencyModal(true);
-    }
+    Linking.openURL('tel:911');
   };
 
-  /**
-   * Execute emergency call (for web)
-   */
-  const executeEmergencyCall = () => {
-    Linking.openURL('tel:911');
-    setShowEmergencyModal(false);
-  };
   
   return (
     <View style={styles.container}>
-      {/* 911 Emergency Button at TOP */}
-      <View style={[styles.emergencyButtonContainer, { paddingTop: Math.max(16, insets.top + 16) }]}>
-        <TouchableOpacity
-          style={styles.emergencyButton}
-          onPress={handleEmergencyCall}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="local-phone" size={32} color="#ffffff" />
-          <Text style={styles.emergencyButtonText}>911 Emergency</Text>
-        </TouchableOpacity>
+      {/* Header with 911 Emergency Button */}
+      <View style={[styles.headerContainer, { paddingTop: Math.max(16, insets.top + 16) }]}>
+        <View style={styles.emergencyButtonContainer}>
+          <TouchableOpacity
+            style={styles.emergencyButton}
+            onPress={handleEmergencyCall}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="local-phone" size={32} color="#ffffff" />
+            <Text style={styles.emergencyButtonText}>911 Emergency</Text>
+          </TouchableOpacity>
+        </View>
       </View>
+
 
       <ScrollView 
         style={styles.scrollView} 
@@ -186,39 +155,6 @@ export function HomePage({ onNavigate, onVoiceCommand }: HomePageProps) {
       </View>
       </ScrollView>
 
-      {/* Emergency Modal (for web) */}
-      <Modal
-        visible={showEmergencyModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowEmergencyModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalIconContainer}>
-              <MaterialIcons name="warning" size={64} color="#D32F2F" />
-            </View>
-            <Text style={styles.modalTitle}>Emergency Call</Text>
-            <Text style={styles.modalText}>
-              Do you want to call 911?
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={styles.modalCancelButton}
-                onPress={() => setShowEmergencyModal(false)}
-              >
-                <Text style={styles.modalCancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCallButton}
-                onPress={executeEmergencyCall}
-              >
-                <Text style={styles.modalCallButtonText}>Call 911</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -234,12 +170,17 @@ const styles = StyleSheet.create({
   contentContainer: {
     flexGrow: 1,
   },
-  emergencyButtonContainer: {
-    width: '100%',
+  headerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 24,
     paddingBottom: 16,
     backgroundColor: '#eff6ff',
     zIndex: 1000,
+    gap: 12,
+  },
+  emergencyButtonContainer: {
+    flex: 1,
   },
   emergencyButton: {
     width: '100%',
@@ -380,72 +321,5 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 18,
     fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#ffffff',
-    borderRadius: 24,
-    padding: 32,
-    alignItems: 'center',
-    maxWidth: 400,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  modalIconContainer: {
-    marginBottom: 16,
-  },
-  modalTitle: {
-    color: '#111827',
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalText: {
-    color: '#4b5563',
-    fontSize: 20,
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    width: '100%',
-  },
-  modalCancelButton: {
-    flex: 1,
-    backgroundColor: '#f3f4f6',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-  },
-  modalCancelButtonText: {
-    color: '#6b7280',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  modalCallButton: {
-    flex: 1,
-    backgroundColor: '#D32F2F',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  modalCallButtonText: {
-    color: '#ffffff',
-    fontSize: 20,
-    fontWeight: 'bold',
   },
 });

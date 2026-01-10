@@ -293,11 +293,21 @@ ROUTING LOGIC
 • Volunteers → when users ask for help, companionship, escorting, logistics, tech help, safety reassurance, or assistance.
   - Mention "Volunteers" or "Volunteer Matching" in your response so buttons appear.
   - IMPORTANT: Users can FIND volunteers, but NEVER suggest users become volunteers themselves.
+  - When users need to pick up medicine/prescriptions from a pharmacy, suggest volunteers for errand/pickup help.
 
-• Health Services → when asking about medical care, clinics, hospitals, hours, directions.
+• Health Services → when asking about medical care, clinics, hospitals, hours, directions, pharmacy locations, or pharmacy information.
   - Mention "Health Services" or "Health" in your response so buttons appear.
+  - When users mention getting medicine from a pharmacy (e.g., CVS, Walgreens), suggest Health Services for pharmacy locations AND Volunteers for pickup help (use both routes: [ROUTE:health] [ROUTE:volunteers]).
 
 • General Info → when none of the above fit.
+
+PHARMACY & MEDICATION PICKUP
+
+• When users mention getting medicine, prescriptions, or picking up from a pharmacy (CVS, Walgreens, Rite Aid, etc.):
+  - Suggest BOTH Health Services (for pharmacy location/hours) AND Volunteers (for errand/pickup help).
+  - Use both route indicators: [ROUTE:health] [ROUTE:volunteers]
+  - Example: "I can help you find nearby pharmacies in Health Services, or I can help you find a volunteer who can pick up your medicine. [ROUTE:health] [ROUTE:volunteers]"
+  - DO NOT create medication reminders - this is about getting/picking up medicine, not scheduling reminders.
 
 VOLUNTEER POLICY (CRITICAL)
 
@@ -1685,6 +1695,640 @@ app.get('/api/diagnose', async (req, res) => {
   }
 
   res.json(diagnostics);
+});
+
+// ============================================
+// NEW ENDPOINTS FOR VOLUNTEER AND FAMILY
+// ============================================
+
+// Mock user database
+const mockUsers = {
+  'ADULT001': { id: 'ADULT001', role: 'older-adult', name: 'Dorothy Smith', createdAt: new Date(Date.now() - 10000000).toISOString() },
+  'ADULT002': { id: 'ADULT002', role: 'older-adult', name: 'Robert Johnson', createdAt: new Date(Date.now() - 9000000).toISOString() },
+  'VOL001': { id: 'VOL001', role: 'volunteer', name: 'Sarah Chen', skills: ['tech', 'grocery'], location: { lat: 37.7749, lng: -122.4194 }, createdAt: new Date(Date.now() - 8000000).toISOString() },
+  'VOL002': { id: 'VOL002', role: 'volunteer', name: 'Michael Brown', skills: ['home-repair', 'mobility'], location: { lat: 37.7849, lng: -122.4094 }, createdAt: new Date(Date.now() - 7000000).toISOString() },
+  'VOL003': { id: 'VOL003', role: 'volunteer', name: 'Emma Williams', skills: ['companionship', 'grocery'], location: { lat: 37.7649, lng: -122.4294 }, createdAt: new Date(Date.now() - 6000000).toISOString() },
+  'FAM001': { id: 'FAM001', role: 'family', name: 'Jennifer Smith', connectedTo: 'ADULT001', createdAt: new Date(Date.now() - 5000000).toISOString() },
+  'FAM002': { id: 'FAM002', role: 'family', name: 'Lisa Johnson', connectedTo: null, createdAt: new Date(Date.now() - 4000000).toISOString() },
+  'MANAGER001': { id: 'MANAGER001', role: 'manager', name: 'Community Manager', createdAt: new Date(Date.now() - 100000000).toISOString() }
+};
+
+// Mock Events Database
+let mockEvents = [
+  {
+    id: 1,
+    name: 'Morning Walking Group',
+    time: 'Today at 9:00 AM',
+    distance: '0.3 mi',
+    icon: '🚶',
+    description: 'Join us for a gentle morning walk.'
+  },
+  {
+    id: 2,
+    name: 'Community Lunch',
+    time: 'Tomorrow at 12:00 PM',
+    distance: '0.5 mi',
+    icon: '🍽️',
+    description: 'Free hot lunch for all seniors.'
+  }
+];
+
+// Mock volunteer requests
+let mockVolunteerRequests = [
+  { 
+    id: 'REQ001', 
+    adultId: 'ADULT001', 
+    adultName: 'Dorothy Smith',
+    type: 'tech', 
+    description: 'Help with computer - screen is black', 
+    status: 'pending',
+    location: { lat: 37.7749, lng: -122.4194 },
+    createdAt: new Date().toISOString(),
+    urgency: 'medium'
+  },
+  { 
+    id: 'REQ002', 
+    adultId: 'ADULT002', 
+    adultName: 'Robert Johnson',
+    type: 'grocery', 
+    description: 'Grocery shopping needed', 
+    status: 'pending',
+    location: { lat: 37.7849, lng: -122.4094 },
+    createdAt: new Date().toISOString(),
+    urgency: 'low'
+  },
+  {
+    id: 'REQ003',
+    adultId: 'ADULT001',
+    adultName: 'Dorothy Smith',
+    type: 'home-repair',
+    description: 'Chair is broken, need help fixing',
+    status: 'pending',
+    location: { lat: 37.7749, lng: -122.4194 },
+    createdAt: new Date().toISOString(),
+    urgency: 'high'
+  }
+];
+
+// Mock volunteer matches
+let mockVolunteerMatches = [
+  {
+    id: 'MATCH001',
+    volunteerId: 'VOL001',
+    requestId: 'REQ001',
+    adultId: 'ADULT001',
+    adultName: 'Dorothy Smith',
+    type: 'tech',
+    description: 'Help with computer - screen is black',
+    status: 'active',
+    location: { lat: 37.7749, lng: -122.4194 },
+    startDate: '2025-11-25T18:30:00.000Z', // 11/25/2025, 10:30 AM PST
+    contactInfo: { phone: '555-0101', address: '123 Main St' }
+  }
+];
+
+// Mock volunteer history
+let mockVolunteerHistory = [
+  {
+    id: 'HIST001',
+    volunteerId: 'VOL001',
+    adultId: 'ADULT002',
+    adultName: 'Robert Johnson',
+    type: 'grocery',
+    status: 'completed',
+    completedDate: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
+    rating: 5,
+    feedback: 'Very helpful and punctual!'
+  }
+];
+
+// User lookup endpoint
+app.post('/api/user-lookup', async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId || typeof userId !== 'string') {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+
+    const user = mockUsers[userId.toUpperCase()];
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({
+      userId: user.id,
+      role: user.role,
+      name: user.name,
+      connectedTo: user.connectedTo || null
+    });
+  } catch (error) {
+    console.error('User lookup error:', error);
+    res.status(500).json({ error: 'Failed to lookup user' });
+  }
+});
+
+// Volunteer endpoints
+app.get('/api/volunteer/requests', async (req, res) => {
+  try {
+    const { volunteerId } = req.query;
+    
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    const volunteer = mockUsers[volunteerId.toUpperCase()];
+    if (!volunteer || volunteer.role !== 'volunteer') {
+      return res.status(404).json({ error: 'Volunteer not found' });
+    }
+
+    // Filter requests by volunteer's skills
+    const filteredRequests = mockVolunteerRequests.filter(req => 
+      volunteer.skills.includes(req.type) && req.status === 'pending'
+    );
+
+    res.json({ requests: filteredRequests });
+  } catch (error) {
+    console.error('Error fetching volunteer requests:', error);
+    res.status(500).json({ error: 'Failed to fetch requests' });
+  }
+});
+
+app.post('/api/volunteer/requests/:id/accept', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { volunteerId } = req.body;
+
+    const request = mockVolunteerRequests.find(r => r.id === id);
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    request.status = 'accepted';
+    
+    // Create a match
+    const match = {
+      id: `MATCH${Date.now()}`,
+      volunteerId: volunteerId,
+      requestId: id,
+      adultId: request.adultId,
+      adultName: request.adultName,
+      type: request.type,
+      description: request.description,
+      location: request.location,
+      status: 'active',
+      startDate: new Date().toISOString(),
+      contactInfo: { phone: '555-0101', address: '123 Main St' }
+    };
+    mockVolunteerMatches.push(match);
+
+    res.json({ success: true, match });
+  } catch (error) {
+    console.error('Error accepting request:', error);
+    res.status(500).json({ error: 'Failed to accept request' });
+  }
+});
+
+app.post('/api/volunteer/requests/:id/decline', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const request = mockVolunteerRequests.find(r => r.id === id);
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    request.status = 'declined';
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error declining request:', error);
+    res.status(500).json({ error: 'Failed to decline request' });
+  }
+});
+
+app.get('/api/volunteer/matches', async (req, res) => {
+  try {
+    const { volunteerId } = req.query;
+
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    const matches = mockVolunteerMatches.filter(m => 
+      m.volunteerId === volunteerId.toUpperCase() && m.status === 'active'
+    );
+
+    res.json({ matches });
+  } catch (error) {
+    console.error('Error fetching matches:', error);
+    res.status(500).json({ error: 'Failed to fetch matches' });
+  }
+});
+
+app.get('/api/volunteer/history', async (req, res) => {
+  try {
+    const { volunteerId } = req.query;
+
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    const history = mockVolunteerHistory.filter(h => 
+      h.volunteerId === volunteerId.toUpperCase()
+    );
+
+    res.json({ history });
+  } catch (error) {
+    console.error('Error fetching history:', error);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
+app.get('/api/volunteer/profile', async (req, res) => {
+  try {
+    const { volunteerId } = req.query;
+
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    const volunteer = mockUsers[volunteerId.toUpperCase()];
+    if (!volunteer || volunteer.role !== 'volunteer') {
+      return res.status(404).json({ error: 'Volunteer not found' });
+    }
+
+    res.json({
+      userId: volunteer.id,
+      name: volunteer.name,
+      skills: volunteer.skills || [],
+      location: volunteer.location || null,
+      bio: volunteer.bio || ''
+    });
+  } catch (error) {
+    console.error('Error fetching profile:', error);
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
+});
+
+app.put('/api/volunteer/profile', async (req, res) => {
+  try {
+    const { volunteerId, skills, location, bio } = req.body;
+
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    const volunteer = mockUsers[volunteerId.toUpperCase()];
+    if (!volunteer || volunteer.role !== 'volunteer') {
+      return res.status(404).json({ error: 'Volunteer not found' });
+    }
+
+    if (skills) volunteer.skills = skills;
+    if (location) volunteer.location = location;
+    if (bio !== undefined) volunteer.bio = bio;
+
+    res.json({ success: true, profile: volunteer });
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+app.get('/api/volunteer/schedule', async (req, res) => {
+  try {
+    const { volunteerId } = req.query;
+
+    if (!volunteerId) {
+      return res.status(400).json({ error: 'Volunteer ID is required' });
+    }
+
+    // Mock schedule - in real app, this would come from database
+    const schedule = volunteerId.toUpperCase() === 'VOL001' ? {
+      monday: { available: true, hours: ['09:00', '17:00'] },
+      tuesday: { available: true, hours: ['09:00', '17:00'] },
+      wednesday: { available: false, hours: [] },
+      thursday: { available: true, hours: ['09:00', '17:00'] },
+      friday: { available: true, hours: ['09:00', '17:00'] },
+      saturday: { available: true, hours: ['10:00', '14:00'] },
+      sunday: { available: false, hours: [] }
+    } : {
+      monday: { available: true, hours: ['08:00', '18:00'] },
+      tuesday: { available: true, hours: ['08:00', '18:00'] },
+      wednesday: { available: true, hours: ['08:00', '18:00'] },
+      thursday: { available: true, hours: ['08:00', '18:00'] },
+      friday: { available: true, hours: ['08:00', '18:00'] },
+      saturday: { available: false, hours: [] },
+      sunday: { available: false, hours: [] }
+    };
+
+    res.json({ schedule });
+  } catch (error) {
+    console.error('Error fetching schedule:', error);
+    res.status(500).json({ error: 'Failed to fetch schedule' });
+  }
+});
+
+app.put('/api/volunteer/schedule', async (req, res) => {
+  try {
+    const { volunteerId, schedule } = req.body;
+
+    if (!volunteerId || !schedule) {
+      return res.status(400).json({ error: 'Volunteer ID and schedule are required' });
+    }
+
+    // In real app, save to database
+    res.json({ success: true, schedule });
+  } catch (error) {
+    console.error('Error updating schedule:', error);
+    res.status(500).json({ error: 'Failed to update schedule' });
+  }
+});
+
+// Family endpoints
+app.post('/api/family/connect', async (req, res) => {
+  try {
+    const { familyId, adultId } = req.body;
+
+    if (!familyId || !adultId) {
+      return res.status(400).json({ error: 'Family ID and Adult ID are required' });
+    }
+
+    const family = mockUsers[familyId.toUpperCase()];
+    const adult = mockUsers[adultId.toUpperCase()];
+
+    if (!family || family.role !== 'family') {
+      return res.status(404).json({ error: 'Family member not found' });
+    }
+
+    if (!adult || adult.role !== 'older-adult') {
+      return res.status(404).json({ error: 'Older adult not found' });
+    }
+
+    family.connectedTo = adultId.toUpperCase();
+
+    res.json({ success: true, adultId: adult.id, adultName: adult.name });
+  } catch (error) {
+    console.error('Error connecting family:', error);
+    res.status(500).json({ error: 'Failed to connect' });
+  }
+});
+
+app.get('/api/family/loved-one', async (req, res) => {
+  try {
+    const { familyId } = req.query;
+
+    if (!familyId) {
+      return res.status(400).json({ error: 'Family ID is required' });
+    }
+
+    const family = mockUsers[familyId.toUpperCase()];
+    if (!family || family.role !== 'family') {
+      return res.status(404).json({ error: 'Family member not found' });
+    }
+
+    if (!family.connectedTo) {
+      return res.status(404).json({ error: 'Not connected to any older adult' });
+    }
+
+    const adult = mockUsers[family.connectedTo];
+    if (!adult) {
+      return res.status(404).json({ error: 'Connected older adult not found' });
+    }
+
+    res.json({ adultId: adult.id, adultName: adult.name });
+  } catch (error) {
+    console.error('Error fetching loved one:', error);
+    res.status(500).json({ error: 'Failed to fetch loved one' });
+  }
+});
+
+app.get('/api/family/medications', async (req, res) => {
+  try {
+    const { adultId } = req.query;
+
+    if (!adultId) {
+      return res.status(400).json({ error: 'Adult ID is required' });
+    }
+
+    // Mock medication data - in real app, fetch from database
+    const medications = [
+      {
+        id: 'MED001',
+        name: 'Aspirin',
+        dosage: '100mg',
+        frequency: 'Daily',
+        reminderTimes: ['08:00'],
+        adherence: 95,
+        lastTaken: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        id: 'MED002',
+        name: 'Metformin',
+        dosage: '500mg',
+        frequency: 'Twice daily',
+        reminderTimes: ['08:00', '20:00'],
+        adherence: 88,
+        lastTaken: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(),
+      },
+    ];
+
+    res.json({ medications });
+  } catch (error) {
+    console.error('Error fetching medications:', error);
+    res.status(500).json({ error: 'Failed to fetch medications' });
+  }
+});
+
+app.get('/api/family/activity', async (req, res) => {
+  try {
+    const { adultId } = req.query;
+
+    if (!adultId) {
+      return res.status(400).json({ error: 'Adult ID is required' });
+    }
+
+    // Mock activity data
+    const activity = {
+      recentEvents: [
+        { id: 'EVT001', name: 'Morning Walking Group', date: new Date().toISOString() },
+      ],
+      healthServicesVisited: [
+        { id: 'HS001', name: 'Springfield Medical Center', date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() },
+      ],
+      volunteerRequests: mockVolunteerRequests.filter(r => r.adultId === adultId.toUpperCase()),
+      lastActive: new Date().toISOString(),
+    };
+
+    res.json(activity);
+  } catch (error) {
+    console.error('Error fetching activity:', error);
+    res.status(500).json({ error: 'Failed to fetch activity' });
+  }
+});
+
+app.get('/api/family/emergency-alerts', async (req, res) => {
+  try {
+    const { adultId } = req.query;
+
+    if (!adultId) {
+      return res.status(400).json({ error: 'Adult ID is required' });
+    }
+
+    // Mock emergency alerts
+    const alerts = [
+      {
+        id: 'ALERT001',
+        type: '911_call',
+        message: '911 was called',
+        timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+        resolved: false,
+      },
+    ];
+
+    res.json({ alerts });
+  } catch (error) {
+    console.error('Error fetching emergency alerts:', error);
+    res.status(500).json({ error: 'Failed to fetch emergency alerts' });
+  }
+});
+
+app.get('/api/family/volunteers', async (req, res) => {
+  try {
+    const { adultId } = req.query;
+
+    if (!adultId) {
+      return res.status(400).json({ error: 'Adult ID is required' });
+    }
+
+    const requests = mockVolunteerRequests.filter(r => r.adultId === adultId.toUpperCase());
+    const matches = mockVolunteerMatches.filter(m => m.adultId === adultId.toUpperCase());
+
+    res.json({ requests, matches });
+  } catch (error) {
+    console.error('Error fetching volunteer info:', error);
+    res.status(500).json({ error: 'Failed to fetch volunteer info' });
+  }
+});
+
+// Manager Endpoints - User Management
+app.get('/api/users', (req, res) => {
+  try {
+    const usersList = Object.values(mockUsers).map(user => ({
+      id: user.id,
+      name: user.name,
+      role: user.role,
+      createdAt: user.createdAt || new Date().toISOString() // Fallback for old data
+    }));
+    res.json({ users: usersList });
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.post('/api/users', (req, res) => {
+  try {
+    const { id, name, role } = req.body;
+
+    if (!id || !name || !role) {
+      return res.status(400).json({ error: 'ID, name, and role are required' });
+    }
+
+    const userId = id.toUpperCase();
+    if (mockUsers[userId]) {
+      return res.status(400).json({ error: 'User ID already exists' });
+    }
+
+    // Create new user with basic defaults based on role
+    const newUser = {
+      id: userId,
+      name,
+      role,
+      createdAt: new Date().toISOString(),
+      // Add role-specific defaults
+      ...(role === 'volunteer' ? { skills: [], location: null } : {}),
+      ...(role === 'family' ? { connectedTo: null } : {})
+    };
+
+    mockUsers[userId] = newUser;
+    console.log('New user created:', newUser);
+    
+    res.json({ success: true, user: newUser });
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.delete('/api/users/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = id.toUpperCase();
+
+    if (!mockUsers[userId]) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    delete mockUsers[userId];
+    console.log('User deleted:', userId);
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// Events endpoints
+app.get('/api/events', (req, res) => {
+  res.json({ events: mockEvents });
+});
+
+app.post('/api/events', (req, res) => {
+  try {
+    const { name, time, distance, icon, description } = req.body;
+    
+    if (!name || !time) {
+      return res.status(400).json({ error: 'Name and time are required' });
+    }
+
+    const newEvent = {
+      id: Date.now(),
+      name,
+      time,
+      distance: distance || 'TBD',
+      icon: icon || '📅',
+      description: description || ''
+    };
+
+    mockEvents.push(newEvent);
+    console.log('New event created:', newEvent.name);
+    res.json({ success: true, event: newEvent });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to create event' });
+  }
+});
+
+app.delete('/api/events/:id', (req, res) => {
+  try {
+    const { id } = req.params;
+    const eventId = parseInt(id);
+
+    const initialLength = mockEvents.length;
+    mockEvents = mockEvents.filter(e => e.id !== eventId);
+
+    if (mockEvents.length === initialLength) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    console.log('Event deleted:', eventId);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting event:', error);
+    res.status(500).json({ error: 'Failed to delete event' });
+  }
 });
 
 app.listen(port, () => {

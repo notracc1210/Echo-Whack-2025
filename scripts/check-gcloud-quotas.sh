@@ -42,3 +42,12 @@ echo "- Speech-to-Text API - Characters per minute"
 echo "- Speech-to-Text API - Requests per minute"
 echo "- Speech-to-Text API - Concurrent requests"
 
+
+
+
+
+
+
+
+
+

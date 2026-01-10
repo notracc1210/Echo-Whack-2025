@@ -19,8 +19,14 @@ export type Page =
   | "health"
   | "medication";
 
-export default function App() {
-  const [currentPage, setCurrentPage] = useState<Page>("home");
+interface AppProps {
+  onLogout?: () => void;
+  initialPage?: Page;
+}
+
+export default function App({ onLogout, initialPage = "home" }: AppProps = {}) {
+  console.log('App component - onLogout received:', !!onLogout, typeof onLogout, onLogout);
+  const [currentPage, setCurrentPage] = useState<Page>(initialPage);
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [shouldAutoStartMatching, setShouldAutoStartMatching] = useState(false);
   // Conversation memory: store last suggested routes from AI
@@ -31,6 +37,10 @@ export default function App() {
   // Check if command is an affirmative response to open suggested routes
   const isAffirmativeResponse = (command: string): boolean => {
     const lowerCommand = command.toLowerCase().trim();
+    
+    // Hidden command removed - access via login page only
+
+    
     const affirmativePhrases = [
       'yes', 'yeah', 'yep', 'yup', 'sure', 'ok', 'okay', 'alright',
       'open it', 'open that', 'go there', 'go to it', 'take me there',
@@ -48,6 +58,11 @@ export default function App() {
   };
 
   const handleVoiceCommand = async (command: string) => {
+    const lowerCommand = command.toLowerCase().trim();
+
+    // Hidden command removed - access via login page only
+
+
     // If on volunteer page, don't route away - let the volunteer page handle it
     if (currentPage === "volunteer") {
       // Stay on volunteer page - the VolunteerMatchingPage will handle the command
@@ -89,14 +104,37 @@ export default function App() {
       setSearchQuery(command);
     }
 
-    const lowerCommand = command.toLowerCase();
+    // Check for pharmacy/pickup scenarios - these should NOT trigger medication reminders
+    // Examples: "I want some medicine from CVS", "I need to pick up my medicine", "get medicine from pharmacy"
+    const pharmacyPickupKeywords = [
+      'from cvs', 'from pharmacy', 'from walgreens', 'from rite aid', 'from target',
+      'pick up', 'pickup', 'get from', 'go to', 'buy from', 'get medicine', 'buy medicine',
+      'want some medicine', 'need some medicine', 'some medicine from', 'medicine from',
+      'prescription from', 'prescription pickup', 'get prescription', 'pick up prescription'
+    ];
+    const isPharmacyPickup = pharmacyPickupKeywords.some(keyword => lowerCommand.includes(keyword));
 
-    // Check for medication reminder keywords - try to create reminder automatically
-    const medicationKeywords = ['remind', 'reminder', 'medicine', 'medication', 'pill', 'tablet', 'take', 'add', 'set'];
-    const looksLikeMedication = medicationKeywords.some(keyword => lowerCommand.includes(keyword));
+    // Check for medication reminder keywords - only trigger for explicit reminder requests
+    // Must include reminder-specific language, not just mentions of medicine/medication
+    const medicationReminderKeywords = [
+      'remind me to take', 'reminder to take', 'remind me take',
+      'add medication reminder', 'add reminder', 'set reminder',
+      'medication reminder', 'pill reminder', 'remind me', 'reminder for',
+      'schedule reminder', 'create reminder'
+    ];
+    const looksLikeMedicationReminder = medicationReminderKeywords.some(keyword => lowerCommand.includes(keyword));
     
-    // If it looks like a medication reminder, try to parse and create it
-    if (looksLikeMedication && currentPage !== "medication") {
+    // Also check if user is explicitly on medication page or explicitly asking about reminders
+    // But exclude pharmacy pickup scenarios
+    const hasMedicationContext = (
+      lowerCommand.includes('take my') && (lowerCommand.includes('medicine') || lowerCommand.includes('medication') || lowerCommand.includes('pill')) ||
+      (lowerCommand.includes('remind') && (lowerCommand.includes('medicine') || lowerCommand.includes('medication') || lowerCommand.includes('pill'))) ||
+      (lowerCommand.includes('add') && lowerCommand.includes('medication')) ||
+      (lowerCommand.includes('set') && lowerCommand.includes('reminder'))
+    ) && !isPharmacyPickup;
+    
+    // If it looks like a medication reminder (and NOT a pharmacy pickup), try to parse and create it
+    if ((looksLikeMedicationReminder || hasMedicationContext) && !isPharmacyPickup && currentPage !== "medication") {
       try {
         const parsed = await parseMedicationReminder(command);
         
@@ -104,7 +142,7 @@ export default function App() {
         const hasTimes = parsed.reminderTimes && parsed.reminderTimes.length > 0;
         
         // If we have name and times, automatically create the reminder
-        if ((parsed.success || looksLikeMedication) && hasName && hasTimes) {
+        if ((parsed.success || looksLikeMedicationReminder || hasMedicationContext) && hasName && hasTimes) {
           const medicationData = {
             name: parsed.name,
             dosage: parsed.dosage || 'As prescribed',
@@ -137,7 +175,7 @@ export default function App() {
             console.error('Error saving medication:', saveError);
             // Continue with normal flow if save fails
           }
-        } else if ((parsed.success || looksLikeMedication) && hasName) {
+        } else if ((parsed.success || looksLikeMedicationReminder || hasMedicationContext) && hasName) {
           // If we have name but no times, navigate to medication page to complete
           setCurrentPage("medication");
           // The MedicationGuidePage will handle pre-filling the form
@@ -149,6 +187,12 @@ export default function App() {
       }
     }
 
+    // Check for pharmacy/pickup scenarios - route to volunteer (errands) or health services
+    if (isPharmacyPickup) {
+      // Route to info page - AI will suggest both Health Services (pharmacy location) and Volunteer (pickup help)
+      setCurrentPage("info");
+      return;
+    }
 
     // Check for "fell down" - route to info page to ask about calling 911
     if (
@@ -184,6 +228,62 @@ export default function App() {
       lowerCommand.includes("i'm feeling uncomfortable")
     ) {
       setCurrentPage("info");
+      return;
+    }
+
+    // Check if user specifies a volunteer type need - route directly to volunteer matching page
+    const volunteerTypeKeywords = {
+      'home-repair': ['repair', 'fix', 'broken', 'maintenance', 'chair broken', 'broken chair', 
+                     'need someone to fix', 'help me fix', 'someone to repair', 'fix my', 'repair my',
+                     'broken item', 'something broken', 'need fixing'],
+      'mobility': ['mobility', 'wheelchair', 'walking assistance', 'walking help', 'mobility assistance',
+                  'help me walk', 'escort', 'walking support', 'mobility support', 'walking escort',
+                  'need to walk', 'help walking'],
+      'grocery': ['grocery', 'shopping', 'errand', 'errands', 'go shopping', 'buy groceries',
+                 'need groceries', 'someone to shop', 'help with shopping', 'grocery help',
+                 'shopping help', 'need shopping', 'errand help', 'pick up', 'pickup',
+                 'get from', 'go to', 'buy from'],
+      'companionship': ['companion', 'friendship', 'visit', 'visitor', 'someone to talk', 
+                       'someone to visit', 'friend', 'companionship', 'someone to chat',
+                       'lonely', 'feel alone', 'want company', 'want someone to visit',
+                       'need someone to talk', 'want to talk to someone'],
+      'tech': ['tech', 'computer', 'phone', 'internet', 'technology', 'device', 'help with computer',
+              'computer help', 'phone help', 'tech support', 'help with phone', 'help with computer',
+              'internet help', 'wifi', 'wi-fi', 'computer broken', 'phone broken', 'device help'],
+      'medical-transport': ['medical transport', 'transport to doctor', 'ride to hospital', 'medical ride',
+                           'need a ride to doctor', 'need a ride to hospital', 'need transport to',
+                           'ride to appointment', 'transport to appointment', 'medical appointment ride',
+                           'need a ride for', 'need transport for']
+    };
+
+    // Check if command contains volunteer type keywords
+    let detectedVolunteerType: string | null = null;
+    for (const [type, keywords] of Object.entries(volunteerTypeKeywords)) {
+      if (keywords.some(keyword => lowerCommand.includes(keyword))) {
+        detectedVolunteerType = type;
+        break;
+      }
+    }
+
+    // If a volunteer type is detected and user is requesting help/finding a volunteer, route directly
+    // Only route directly if the command indicates they're looking for help/volunteer (not just mentioning the keyword)
+    if (detectedVolunteerType && (
+      lowerCommand.includes("volunteer") ||
+      lowerCommand.includes("help") ||
+      lowerCommand.includes("need") ||
+      lowerCommand.includes("want") ||
+      lowerCommand.includes("find") ||
+      lowerCommand.includes("someone") ||
+      lowerCommand.includes("looking for") ||
+      lowerCommand.includes("i ") || // Common: "I need tech help", "I want someone to fix"
+      lowerCommand.includes("my ") || // Common: "my chair is broken", "my computer"
+      lowerCommand.includes("someone to") || // Common: "someone to fix", "someone to shop"
+      lowerCommand.includes("looking for") // "looking for help"
+    )) {
+      // Set context query and navigate directly to volunteer matching page
+      setVolunteerContextQuery(command);
+      setShouldAutoStartMatching(true);
+      setCurrentPage("volunteer");
       return;
     }
 

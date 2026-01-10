@@ -117,3 +117,12 @@ Once you've added the API key:
 - Results include real addresses, ratings, and hours
 - The app falls back to sample data if the API key is missing or invalid
 
+
+
+
+
+
+
+
+
+

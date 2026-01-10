@@ -195,3 +195,12 @@ OPENAI_MODEL=gpt-4o
 - **Google AI Studio**: https://aistudio.google.com/
 - **Quota Management**: https://console.cloud.google.com/iam-admin/quotas
 
+
+
+
+
+
+
+
+
+

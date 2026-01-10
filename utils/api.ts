@@ -2,7 +2,7 @@
 // Get your IP with: ifconfig | grep "inet " | grep -v 127.0.0.1
 // Or check Expo dev tools - it shows the IP address
 // Note: If IP changes, update EXPO_PUBLIC_API_BASE_URL in .env file
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://10.185.2.93:3001';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.0.18:3001';
 
 // Helper to log current API URL for debugging
 if (__DEV__) {
@@ -16,20 +16,38 @@ const LONG_TIMEOUT = 60000; // 60 seconds for speech-to-text and TTS (increased 
 /**
  * Create a fetch request with timeout
  */
-function fetchWithTimeout(url: string, options: RequestInit = {}, timeout: number = DEFAULT_TIMEOUT): Promise<Response> {
+export function fetchWithTimeout(url: string, options: RequestInit = {}, timeout: number = DEFAULT_TIMEOUT): Promise<Response> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   
-  return Promise.race([
+  return new Promise<Response>((resolve, reject) => {
+    const timeoutErrorId = setTimeout(() => {
+      controller.abort();
+      clearTimeout(timeoutId);
+      reject(new Error(`Request timeout (${timeout/1000} seconds). This may be a network connection issue or incorrect server address. Current server address: ${API_BASE_URL}`));
+    }, timeout);
+    
     fetch(url, { ...options, signal: controller.signal })
-      .finally(() => clearTimeout(timeoutId)),
-    new Promise<Response>((_, reject) =>
-      setTimeout(() => {
+      .then(response => {
         clearTimeout(timeoutId);
-        reject(new Error(`Request timeout (${timeout/1000} seconds). This may be a network connection issue or incorrect server address. Current server address: ${API_BASE_URL}`));
-      }, timeout)
-    ),
-  ]) as Promise<Response>;
+        clearTimeout(timeoutErrorId);
+        resolve(response);
+      })
+      .catch(error => {
+        clearTimeout(timeoutId);
+        clearTimeout(timeoutErrorId);
+        
+        // Handle AbortError specifically
+        if (error.name === 'AbortError' || error instanceof DOMException) {
+          // Check if it was aborted due to timeout
+          reject(new Error(`Request timeout (${timeout/1000} seconds). Unable to connect to ${API_BASE_URL}. Please check:\n1. Server is running (cd server && npm start)\n2. Network connection is working\n3. Server address is correct: ${API_BASE_URL}\n4. If using a device, ensure it's on the same network as the server`));
+        } else if (error.message?.includes('Failed to fetch') || error.message?.includes('Network request failed')) {
+          reject(new Error(`Network error: Unable to connect to ${API_BASE_URL}. Please check:\n1. Server is running (cd server && npm start)\n2. Network connection is working\n3. Server address is correct: ${API_BASE_URL}\n4. If using a device, ensure it's on the same network as the server`));
+        } else {
+          reject(error);
+        }
+      });
+  });
 }
 
 export interface SpeechToTextResponse {

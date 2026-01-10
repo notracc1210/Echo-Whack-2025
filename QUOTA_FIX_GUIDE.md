@@ -135,3 +135,12 @@ openai.chat.completions.create({
 3. **增加延迟** - 如果速率限制，增加 MIN_REQUEST_INTERVAL
 4. **升级计划** - 如果需要更高的限制
 
+
+
+
+
+
+
+
+
+

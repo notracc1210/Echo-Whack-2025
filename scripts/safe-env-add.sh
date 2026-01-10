@@ -45,3 +45,12 @@ else
     echo "✅ Added $VAR_NAME to $ENV_FILE"
 fi
 
+
+
+
+
+
+
+
+
+

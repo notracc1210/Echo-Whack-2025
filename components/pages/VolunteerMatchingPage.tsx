@@ -165,7 +165,10 @@ export function VolunteerMatchingPage({ onBack, onVoiceCommand, autoStartMatchin
                  lowerQuery.includes('walking') || lowerQuery.includes('assistance')) {
         matchedNeedId = 'mobility';
       } else if (lowerQuery.includes('grocery') || lowerQuery.includes('shopping') || 
-                 lowerQuery.includes('errand')) {
+                 lowerQuery.includes('errand') || lowerQuery.includes('pick up') ||
+                 lowerQuery.includes('pickup') || lowerQuery.includes('medicine from') ||
+                 lowerQuery.includes('prescription from') || lowerQuery.includes('pharmacy') ||
+                 lowerQuery.includes('from cvs') || lowerQuery.includes('from walgreens')) {
         matchedNeedId = 'grocery';
       } else if (lowerQuery.includes('companion') || lowerQuery.includes('friend') || 
                  lowerQuery.includes('visit') || lowerQuery.includes('lonely')) {
@@ -216,7 +219,10 @@ export function VolunteerMatchingPage({ onBack, onVoiceCommand, autoStartMatchin
                  lowerQuery.includes('walking') || lowerQuery.includes('assistance')) {
         matchedNeedId = 'mobility';
       } else if (lowerQuery.includes('grocery') || lowerQuery.includes('shopping') || 
-                 lowerQuery.includes('errand')) {
+                 lowerQuery.includes('errand') || lowerQuery.includes('pick up') ||
+                 lowerQuery.includes('pickup') || lowerQuery.includes('medicine from') ||
+                 lowerQuery.includes('prescription from') || lowerQuery.includes('pharmacy') ||
+                 lowerQuery.includes('from cvs') || lowerQuery.includes('from walgreens')) {
         matchedNeedId = 'grocery';
       } else if (lowerQuery.includes('companion') || lowerQuery.includes('friend') || 
                  lowerQuery.includes('visit') || lowerQuery.includes('lonely')) {
@@ -247,7 +253,10 @@ export function VolunteerMatchingPage({ onBack, onVoiceCommand, autoStartMatchin
              lowerCommand.includes(need.id) ||
              (need.id === 'home-repair' && (lowerCommand.includes('repair') || lowerCommand.includes('fix') || lowerCommand.includes('maintenance'))) ||
              (need.id === 'mobility' && (lowerCommand.includes('mobility') || lowerCommand.includes('wheelchair') || lowerCommand.includes('walking'))) ||
-             (need.id === 'grocery' && (lowerCommand.includes('grocery') || lowerCommand.includes('shopping') || lowerCommand.includes('errand'))) ||
+             (need.id === 'grocery' && (lowerCommand.includes('grocery') || lowerCommand.includes('shopping') || 
+                                       lowerCommand.includes('errand') || lowerCommand.includes('pick up') ||
+                                       lowerCommand.includes('pickup') || lowerCommand.includes('medicine from') ||
+                                       lowerCommand.includes('prescription from') || lowerCommand.includes('pharmacy'))) ||
              (need.id === 'companionship' && (lowerCommand.includes('companion') || lowerCommand.includes('friend') || lowerCommand.includes('visit'))) ||
              (need.id === 'tech' && (lowerCommand.includes('tech') || lowerCommand.includes('computer') || lowerCommand.includes('phone') || lowerCommand.includes('internet'))) ||
              (need.id === 'medical-transport' && (lowerCommand.includes('medical') || lowerCommand.includes('transport') || lowerCommand.includes('doctor') || lowerCommand.includes('hospital')));

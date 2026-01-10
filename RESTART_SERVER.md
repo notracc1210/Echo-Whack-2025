@@ -67,3 +67,12 @@ OpenAI API quota exceeded. Please check your OpenAI account billing and usage li
 3. **升级计划**: 如果需要更高的配额，考虑升级到付费计划
 4. **等待重置**: 某些配额可能会定期重置（如每分钟请求数）
 
+
+
+
+
+
+
+
+
+

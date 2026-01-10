@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal, Alert, ActivityIndicator, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, TextInput, Modal, Alert, ActivityIndicator } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker from '@react-native-community/datetimepicker';
 import { VoiceButton } from '../VoiceButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Medication, getMedications, saveMedication, deleteMedication } from '../../utils/medicationStorage';
-import { scheduleAllMedicationReminders, requestNotificationPermissions, cancelMedicationNotificationsById } from '../../utils/medicationNotifications';
-import { getMedicationSuggestions, parseMedicationReminder } from '../../utils/api';
+import { scheduleAllMedicationReminders, requestNotificationPermissions } from '../../utils/medicationNotifications';
+import { getMedicationSuggestions } from '../../utils/api';
 
 interface MedicationGuidePageProps {
   onBack: () => void;
@@ -26,8 +25,7 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
     frequency: 'Daily',
     reminderTimes: [] as string[],
   });
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [selectedTime, setSelectedTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState('');
   const [symptomInput, setSymptomInput] = useState('');
   const [suggestions, setSuggestions] = useState<any>(null);
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
@@ -70,7 +68,7 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
         frequency: 'Daily',
         reminderTimes: [],
       });
-      setShowTimePicker(false);
+      setCurrentTime('');
       Alert.alert('Success', 'Medication added and reminders scheduled!');
     } catch (error) {
       console.error('Error adding medication:', error);
@@ -89,8 +87,6 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
           style: 'destructive',
           onPress: async () => {
             try {
-              // Cancel all notifications for this medication
-              await cancelMedicationNotificationsById(id);
               await deleteMedication(id);
               setMedications(medications.filter(m => m.id !== id));
             } catch (error) {
@@ -103,46 +99,20 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
     );
   };
 
-  const handleTimeChange = (event: any, date?: Date) => {
-    if (Platform.OS === 'android') {
-      setShowTimePicker(false);
-      if (event.type === 'set' && date) {
-        addTimeFromDate(date);
+  const addReminderTime = () => {
+    if (currentTime.trim() && /^\d{2}:\d{2}$/.test(currentTime)) {
+      if (!newMedication.reminderTimes.includes(currentTime)) {
+        setNewMedication({
+          ...newMedication,
+          reminderTimes: [...newMedication.reminderTimes, currentTime].sort(),
+        });
+        setCurrentTime('');
+      } else {
+        Alert.alert('Duplicate Time', 'This reminder time is already added.');
       }
     } else {
-      // iOS: update selected time as user scrolls
-      if (date) {
-        setSelectedTime(date);
-      }
+      Alert.alert('Invalid Time', 'Please enter time in HH:MM format (e.g., 09:00, 14:30)');
     }
-  };
-
-  const addTimeFromDate = (date: Date) => {
-    if (newMedication.reminderTimes.length >= 3) {
-      Alert.alert('Maximum Limit', 'You can only add up to 3 reminder times.');
-      return;
-    }
-
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    const timeString = `${hours}:${minutes}`;
-    
-    if (!newMedication.reminderTimes.includes(timeString)) {
-      setNewMedication({
-        ...newMedication,
-        reminderTimes: [...newMedication.reminderTimes, timeString].sort(),
-      });
-    } else {
-      Alert.alert('Duplicate Time', 'This reminder time is already added.');
-    }
-  };
-
-  const openTimePicker = () => {
-    if (newMedication.reminderTimes.length >= 3) {
-      Alert.alert('Maximum Limit', 'You can only add up to 3 reminder times.');
-      return;
-    }
-    setShowTimePicker(true);
   };
 
   const removeReminderTime = (time: string) => {
@@ -152,10 +122,8 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
     });
   };
 
-  const handleGetSuggestions = async (symptoms?: string) => {
-    const symptomsText = symptoms || symptomInput;
-    
-    if (!symptomsText.trim()) {
+  const handleGetSuggestions = async () => {
+    if (!symptomInput.trim()) {
       Alert.alert('Missing Information', 'Please describe your symptoms.');
       return;
     }
@@ -163,13 +131,8 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
     setIsLoadingSuggestions(true);
     setSuggestions(null);
     
-    // Update symptom input if provided
-    if (symptoms) {
-      setSymptomInput(symptoms);
-    }
-    
     try {
-      const result = await getMedicationSuggestions(symptomsText);
+      const result = await getMedicationSuggestions(symptomInput);
       setSuggestions(result);
     } catch (error) {
       console.error('Error getting suggestions:', error);
@@ -179,136 +142,7 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
     }
   };
 
-  const handleVoiceCommand = async (command: string) => {
-    if (activeTab === 'suggestions') {
-      // On suggestions tab, use voice input as symptoms and get medication suggestions
-      handleGetSuggestions(command);
-    } else {
-      // On reminders tab, try to parse medication reminder from voice command
-      try {
-        setIsLoading(true);
-        const parsed = await parseMedicationReminder(command);
-        
-        // Check if this looks like a medication reminder request (even if AI said success=false)
-        const medicationKeywords = ['remind', 'reminder', 'medicine', 'medication', 'pill', 'tablet', 'take', 'add', 'set'];
-        const lowerCommand = command.toLowerCase();
-        const looksLikeMedication = medicationKeywords.some(keyword => lowerCommand.includes(keyword));
-        
-        // If we have a name and times, or if it looks like a medication request, proceed
-        const hasName = parsed.name && parsed.name.trim() !== '' && parsed.name !== 'null';
-        const hasTimes = parsed.reminderTimes && parsed.reminderTimes.length > 0;
-        
-        if ((parsed.success || looksLikeMedication) && hasName && hasTimes) {
-          // Automatically create the medication reminder
-          const medicationData = {
-            name: parsed.name,
-            dosage: parsed.dosage || 'As prescribed',
-            frequency: parsed.frequency || 'Daily',
-            reminderTimes: parsed.reminderTimes,
-          };
-          
-          try {
-            const medication = await saveMedication(medicationData);
-            // Schedule notifications
-            await scheduleAllMedicationReminders(medication);
-            
-            // Reload medications list
-            await loadMedications();
-            
-            // Show success message
-            Alert.alert(
-              'Medication Reminder Added',
-              `Successfully added ${medication.name}${medication.dosage ? ` (${medication.dosage})` : ''} with reminders at ${medication.reminderTimes.map(t => formatTime(t)).join(', ')}.`,
-              [{ text: 'OK' }]
-            );
-          } catch (saveError) {
-            console.error('Error saving medication:', saveError);
-            Alert.alert(
-              'Error',
-              'Failed to save medication reminder. Please try again or use the form.',
-              [{ text: 'OK' }]
-            );
-          }
-        } else if ((parsed.success || looksLikeMedication) && hasName) {
-          // If we have a name but no times, pre-fill the form for user to complete
-          setNewMedication({
-            name: parsed.name || 'Medication',
-            dosage: parsed.dosage || 'As prescribed',
-            frequency: parsed.frequency || 'Daily',
-            reminderTimes: parsed.reminderTimes || ['08:00'], // Default to one time
-          });
-          
-          // Open the modal to show the parsed information
-          setShowAddModal(true);
-          
-          // Show message asking for times
-          Alert.alert(
-            'Medication Reminder',
-            `I found: ${parsed.name}${parsed.dosage ? ` (${parsed.dosage})` : ''}. Please review and add reminder times if needed, then save.`,
-            [{ text: 'OK' }]
-          );
-        } else if (looksLikeMedication) {
-          // Even if parsing failed, if it looks like medication, open the form
-          setNewMedication({
-            name: parsed.name || 'Medication',
-            dosage: parsed.dosage || 'As prescribed',
-            frequency: parsed.frequency || 'Daily',
-            reminderTimes: parsed.reminderTimes || ['08:00'],
-          });
-          
-          setShowAddModal(true);
-          Alert.alert(
-            'Add Medication Reminder',
-            'I detected you want to add a medication reminder. Please fill in the details and save.',
-            [{ text: 'OK' }]
-          );
-        } else {
-          // If parsing failed and doesn't look like medication, use default handler
-          Alert.alert(
-            'Could not parse medication reminder',
-            parsed.message || 'Please try speaking more clearly, or use the form to add a medication reminder.',
-            [{ text: 'OK' }]
-          );
-          // Still call the default handler for other commands
-          onVoiceCommand(command);
-        }
-      } catch (error: any) {
-        console.error('Error parsing medication reminder:', error);
-        let errorMessage = 'Failed to parse medication reminder. Please try again or use the form.';
-        
-        // Provide more specific error messages
-        if (error.message) {
-          if (error.message.includes('404') || error.message.includes('not found')) {
-            errorMessage = 'Server endpoint not found. Please make sure the server is running (cd server && npm start).';
-          } else if (error.message.includes('HTML') || error.message.includes('JSON Parse')) {
-            errorMessage = 'Server returned an error. Please check if the server is running and try again.';
-          } else {
-            errorMessage = error.message;
-          }
-        }
-        
-        Alert.alert(
-          'Error',
-          errorMessage,
-          [{ text: 'OK' }]
-        );
-        // Fall back to default handler
-        onVoiceCommand(command);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
   const frequencyOptions = ['Daily', 'Twice daily', 'Three times daily', 'Four times daily', 'As needed'];
-
-  // Convert HH:MM format to 12-hour format with AM/PM
-  const formatTime = (time24: string): string => {
-    const [hours, minutes] = time24.split(':').map(Number);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const hours12 = hours === 0 ? 12 : hours > 12 ? hours - 12 : hours;
-    return `${hours12}:${minutes.toString().padStart(2, '0')} ${period}`;
-  };
 
   return (
     <View style={styles.container}>
@@ -399,7 +233,7 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
                     <View style={styles.reminderTimesList}>
                       {medication.reminderTimes.map((time) => (
                         <View key={time} style={styles.reminderTimeBadge}>
-                          <Text style={styles.reminderTimeText}>{formatTime(time)}</Text>
+                          <Text style={styles.reminderTimeText}>{time}</Text>
                         </View>
                       ))}
                     </View>
@@ -528,64 +362,25 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
                 ))}
               </ScrollView>
 
-              <Text style={styles.inputLabel}>Reminder Times * (up to 3)</Text>
-              <TouchableOpacity 
-                style={[
-                  styles.input, 
-                  styles.timeInputButton,
-                  newMedication.reminderTimes.length >= 3 && styles.timeInputButtonDisabled
-                ]} 
-                onPress={openTimePicker}
-                disabled={newMedication.reminderTimes.length >= 3}
-              >
-                <MaterialIcons 
-                  name="access-time" 
-                  size={24} 
-                  color={newMedication.reminderTimes.length >= 3 ? '#9ca3af' : '#2563eb'} 
+              <Text style={styles.inputLabel}>Reminder Times * (HH:MM format)</Text>
+              <View style={styles.timeInputRow}>
+                <TextInput
+                  style={[styles.input, styles.timeInput]}
+                  placeholder="09:00"
+                  value={currentTime}
+                  onChangeText={setCurrentTime}
+                  keyboardType="numeric"
                 />
-                <Text style={[
-                  styles.timeInputButtonText,
-                  newMedication.reminderTimes.length >= 3 && styles.timeInputButtonTextDisabled
-                ]}>
-                  Select Time
-                </Text>
-              </TouchableOpacity>
-              
-              {showTimePicker && (
-                <DateTimePicker
-                  value={selectedTime}
-                  mode="time"
-                  is24Hour={false}
-                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                  onChange={handleTimeChange}
-                />
-              )}
-              
-              {Platform.OS === 'ios' && showTimePicker && (
-                <View style={styles.timePickerActions}>
-                  <TouchableOpacity 
-                    style={styles.timePickerCancelButton}
-                    onPress={() => setShowTimePicker(false)}
-                  >
-                    <Text style={styles.timePickerCancelText}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.timePickerConfirmButton}
-                    onPress={() => {
-                      addTimeFromDate(selectedTime);
-                      setShowTimePicker(false);
-                    }}
-                  >
-                    <Text style={styles.timePickerConfirmText}>Confirm</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
+                <TouchableOpacity style={styles.addTimeButton} onPress={addReminderTime}>
+                  <MaterialIcons name="add" size={24} color="#ffffff" />
+                </TouchableOpacity>
+              </View>
 
               {newMedication.reminderTimes.length > 0 && (
-                <View style={[styles.reminderTimesList, styles.reminderTimesListModal]}>
+                <View style={styles.reminderTimesList}>
                   {newMedication.reminderTimes.map((time) => (
                     <View key={time} style={styles.reminderTimeBadge}>
-                      <Text style={styles.reminderTimeText}>{formatTime(time)}</Text>
+                      <Text style={styles.reminderTimeText}>{time}</Text>
                       <TouchableOpacity onPress={() => removeReminderTime(time)}>
                         <MaterialIcons name="close" size={18} color="#ffffff" />
                       </TouchableOpacity>
@@ -609,11 +404,7 @@ export function MedicationGuidePage({ onBack, onVoiceCommand }: MedicationGuideP
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: Math.max(32, insets.bottom + 16) }]}>
-        <VoiceButton 
-          onCommand={handleVoiceCommand} 
-          label={activeTab === 'suggestions' ? 'Describe your symptoms' : 'Add medication reminder'} 
-          size="medium" 
-        />
+        <VoiceButton onCommand={onVoiceCommand} label="Ask something else" size="medium" />
       </View>
     </View>
   );
@@ -643,7 +434,6 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#111827',
     fontSize: 30,
-    fontWeight: 'bold',
   },
   tabs: {
     flexDirection: 'row',
@@ -772,9 +562,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
-  },
-  reminderTimesListModal: {
-    marginTop: 20,
   },
   reminderTimeBadge: {
     flexDirection: 'row',
@@ -955,63 +742,12 @@ const styles = StyleSheet.create({
   timeInput: {
     flex: 1,
   },
-  timeInputButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#ffffff',
-    borderWidth: 2,
-    borderColor: '#2563eb',
-    borderStyle: 'dashed',
-  },
-  timeInputButtonText: {
-    color: '#2563eb',
-    fontSize: 20,
-    fontWeight: '600',
-  },
-  timeInputButtonDisabled: {
-    borderColor: '#d1d5db',
-    backgroundColor: '#f9fafb',
-    opacity: 0.6,
-  },
-  timeInputButtonTextDisabled: {
-    color: '#9ca3af',
-  },
   addTimeButton: {
     backgroundColor: '#2563eb',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  timePickerActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-    marginTop: 12,
-  },
-  timePickerCancelButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#f3f4f6',
-  },
-  timePickerCancelText: {
-    color: '#6b7280',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-  timePickerConfirmButton: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    backgroundColor: '#2563eb',
-  },
-  timePickerConfirmText: {
-    color: '#ffffff',
-    fontSize: 18,
-    fontWeight: '600',
   },
   modalFooter: {
     flexDirection: 'row',
