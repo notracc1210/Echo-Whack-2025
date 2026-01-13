@@ -148,7 +148,9 @@ This project is private and proprietary.
 
 ## 👥 Team
 
-Built with ❤️ for seniors and their families.
+[Tracy Chen](https://github.com/notracc1210)
+[Rue Huang](https://github.com/wanrue1222)
+[Vera Li](https://www.linkedin.com/in/vera-li-/)
 
 
 
