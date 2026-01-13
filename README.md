@@ -148,9 +148,9 @@ This project is private and proprietary.
 
 ## 👥 Team
 
-[Tracy Chen](https://github.com/notracc1210)
-[Rue Huang](https://github.com/wanrue1222)
-[Vera Li](https://www.linkedin.com/in/vera-li-/)
+- [Tracy Chen](https://www.linkedin.com/in/peijun-chen-tracy/)
+- [Rue Huang](https://www.linkedin.com/in/wanruhuang1/)
+- [Vera Li](https://www.linkedin.com/in/vera-li-/)
 
 
 
